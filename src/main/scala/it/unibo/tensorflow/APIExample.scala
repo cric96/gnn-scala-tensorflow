@@ -7,6 +7,10 @@ import org.platanios.tensorflow.api.learn.{Mode, TRAINING}
 import org.platanios.tensorflow.api.tensors.Tensor
 
 object APIExample extends App {
+  val s = Session()
+  implicit class RichOutput[T](out : Output[T]) {
+    def get : Tensor[T] = s.run(fetches = out)
+  }
   // Tensor is compiled checked
   val zeros : Tensor[Float] = Tensor.zeros[Float](Shape(2, 2, 9, 6)) // equivalent to tf.zeros((2, 2, 9, 6), dtype=tf.float32)
   // val zeroError : Tensor[Int] = Tensor.zeros[Float](Shape(2, 5)) error!!
@@ -17,7 +21,7 @@ object APIExample extends App {
   val sum = tensor + tensor
   val mul = tensor * tensor
   // It has a similar tensorflow api through tf
-  tf.matmul(matrix, matrix)
+  println(tf.matmul(matrix, matrix).get.summarize())
   // Slicing
   val slice = zeros(::, ::, 0 :: 2, ::)
   println(slice.summarize())
