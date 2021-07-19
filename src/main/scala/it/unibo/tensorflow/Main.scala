@@ -1,34 +1,43 @@
 package it.unibo.tensorflow
 
-import it.unibo.tensorflow.GNN.Dense
+import org.platanios.tensorflow.api.learn.layers.{Loss, ReLU}
 import org.platanios.tensorflow.api.learn.{INFERENCE, Mode, TRAINING}
-import org.platanios.tensorflow.api.learn.layers.{Identity, Linear, Loss, ReLU}
 import org.platanios.tensorflow.api.ops.training.optimizers.{GradientDescent, Optimizer}
-import org.platanios.tensorflow.api.tf.learn.Layer
 import org.platanios.tensorflow.api.{Output, Tensor, _}
-
+// N.B. intellidea compiler seems to have problems with implicit resolution. Even if there are errors, the program is correct..
 object Main extends App {
-  val inputSize = 1
-  val hiddenFeatureSize = 3
-  val outputSize = 1
-  val denseLayer0 = Dense("0", hiddenFeatureSize, inputSize)
-  val denseLayer1 = Dense("1", hiddenFeatureSize, hiddenFeatureSize)
-  val outputLayer = Dense("output", outputSize, hiddenFeatureSize + inputSize)
-  val activation = ReLU[Float]("Activation0")
-  val activationFn : Output[Float] => Output[Float] = output => activation(output)(TRAINING)
-  val mlp = denseLayer1 compose activationFn compose denseLayer0
-  implicit val session : Session = Session()
-
-  def forward()(implicit mode : Mode) : Output[Float] = {
-    val hidden = GNN.layer(Dataset.nodes, Dataset.edges, mlp, activation) // learn representation
-    val concatenation = tf.concatenate(Seq(hidden, (Dataset.nodes : Output[Float])), 1) // concat representation with feature vector
+  // Some constant
+  private val inputSize = 1
+  private val hiddenFeatureSize = 3
+  private val outputSize = 1
+  private val denseLayer0 = Dense("0", hiddenFeatureSize, inputSize)
+  private val denseLayer1 = Dense("1", hiddenFeatureSize, hiddenFeatureSize)
+  private val outputLayer = Dense("output", outputSize, hiddenFeatureSize + inputSize)
+  private val activation = ReLU[Float]("Activation0")
+  // Utility to compose with dense function
+  private val activationFn : Output[Float] => Output[Float] = output => activation(output)(TRAINING)
+  // It is like denseLayer => ReLU => denseLayer1 => ReLU
+  private val mlp = activationFn compose denseLayer1 compose activationFn compose denseLayer0
+  // Train utils
+  private val optimizer = GradientDescent(0.009f)
+  private val epoch = 300t
+  implicit val mode : Mode = INFERENCE // Contextual abstraction, here the
+  // Current tensorflow session
+  private implicit val session : Session = Session()
+  // Initialize variables
+  tf.globalVariablesInitializer().eval()
+  // Utility to perform a forward gnn like pass
+  def forward(input : Output[Float], adjacencyMatrix : Output[Float])(implicit mode : Mode) : Output[Float] = {
+    val hidden = GNN.layer(input, adjacencyMatrix, mlp, activation) // learn representation
+    val concatenation = tf.concatenate(Seq(hidden, input), axis = 1) // concat representation with feature vector
     outputLayer(concatenation) // compute the right value
   }
+  // Train cycle
   def train(optimizer : Optimizer, epochs : Int) : Unit = {
     val loss = Loss.API.L2Loss[Float, Float]("loss")
-    implicit val mode = TRAINING
+    implicit val mode : Mode = TRAINING
     (0 to epochs).foreach(i => {
-      val output = forward()
+      val output = forward(Dataset.nodes, Dataset.edges) // forward pass
       val lossResult = loss((output, Dataset.groundTruth)) // compute loss
       println(s"Epoch $i,")
       val gradients = optimizer.minimize(lossResult)
@@ -36,38 +45,9 @@ object Main extends App {
       println("loss" + lossResult.value().summarize())
     })
   }
-  val optimizer = GradientDescent(0.009f)
-  tf.globalVariablesInitializer().eval()
-  val epoch = 300
+  // API Call example
   train(optimizer, epoch)
-  val result = forward()(INFERENCE)
+  // "Validation"
+  val result = forward(Dataset.nodes, Dataset.edges)(INFERENCE)
   println(result.value().summarize())
-}
-
-object Dataset {
-  /**
-   * Graph example:
-   * (1, 0) - (0, 1)
-   *  |        |
-   * (0, 2) - (0, 3)
-   */
-  val nodes = Tensor(
-    Tensor(1f), // node 0
-    Tensor(0f), // node 1
-    Tensor(0f), // node 2
-    Tensor(0f), // node 3
-  )
-  val edges = Tensor( // With self loops
-    Tensor(1f, 1f, 1f, 0f), // node 0
-    Tensor(1f, 1f, 0f, 1f), // node 1
-    Tensor(1f, 0f, 1f, 1f), // node 2
-    Tensor(0f, 1f, 1f, 1f), // node 3
-  )
-  // hop count towards node 0
-  val groundTruth = Tensor(
-    Tensor(0f),
-    Tensor(1f),
-    Tensor(1f),
-    Tensor(2f),
-  )
 }
