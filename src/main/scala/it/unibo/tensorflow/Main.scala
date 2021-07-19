@@ -20,7 +20,7 @@ object Main extends App {
   private val mlp = activationFn compose denseLayer1 compose activationFn compose denseLayer0
   // Train utils
   private val optimizer = GradientDescent(0.009f)
-  private val epoch = 300t
+  private val epoch = 300
   implicit val mode : Mode = INFERENCE // Contextual abstraction, here the
   // Current tensorflow session
   private implicit val session : Session = Session()
