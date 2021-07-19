@@ -15,27 +15,30 @@ object Main extends App {
   private val outputLayer = Dense("output", outputSize, hiddenFeatureSize + inputSize)
   private val activation = ReLU[Float]("Activation0")
   // Utility to compose with dense function
-  private val activationFn : Output[Float] => Output[Float] = output => activation(output)(TRAINING)
+  private val activationFn: Output[Float] => Output[Float] = output => activation(output)(TRAINING)
   // It is like denseLayer => ReLU => denseLayer1 => ReLU
   private val mlp = activationFn compose denseLayer1 compose activationFn compose denseLayer0
   // Train utils
   private val optimizer = GradientDescent(0.009f)
   private val epoch = 300
-  implicit val mode : Mode = INFERENCE // Contextual abstraction, here the
+  implicit val mode: Mode = INFERENCE // Contextual abstraction, here the
   // Current tensorflow session
-  private implicit val session : Session = Session()
+  private implicit val session: Session = Session()
   // Initialize variables
   tf.globalVariablesInitializer().eval()
   // Utility to perform a forward gnn like pass
-  def forward(input : Output[Float], adjacencyMatrix : Output[Float])(implicit mode : Mode) : Output[Float] = {
+  def forward(input: Output[Float], adjacencyMatrix: Output[Float])(implicit
+      mode: Mode
+  ): Output[Float] = {
     val hidden = GNN.layer(input, adjacencyMatrix, mlp, activation) // learn representation
-    val concatenation = tf.concatenate(Seq(hidden, input), axis = 1) // concat representation with feature vector
+    val concatenation =
+      tf.concatenate(Seq(hidden, input), axis = 1) // concat representation with feature vector
     outputLayer(concatenation) // compute the right value
   }
   // Train cycle
-  def train(optimizer : Optimizer, epochs : Int) : Unit = {
+  def train(optimizer: Optimizer, epochs: Int): Unit = {
     val loss = Loss.API.L2Loss[Float, Float]("loss")
-    implicit val mode : Mode = TRAINING
+    implicit val mode: Mode = TRAINING
     (0 to epochs).foreach(i => {
       val output = forward(Dataset.nodes, Dataset.edges) // forward pass
       val lossResult = loss((output, Dataset.groundTruth)) // compute loss
