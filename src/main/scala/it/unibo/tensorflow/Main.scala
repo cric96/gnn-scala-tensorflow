@@ -12,12 +12,16 @@ object Main extends App {
   val hiddenFeatureSize = 3
   val outputSize = 1
   val denseLayer0 = Dense("0", hiddenFeatureSize, inputSize)
+  val denseLayer1 = Dense("1", hiddenFeatureSize, hiddenFeatureSize)
   val outputLayer = Dense("output", outputSize, hiddenFeatureSize + inputSize)
   val activation = ReLU[Float]("Activation0")
+  val activationFn : Output[Float] => Output[Float] = output => activation(output)(TRAINING)
+  val mlp = denseLayer1 compose activationFn compose denseLayer0
+  implicit val session : Session = Session()
 
   def forward()(implicit mode : Mode) : Output[Float] = {
-    val hidden = GNN.layer(Dataset.nodes, Dataset.edges, denseLayer0, activation) // learn representation
-    val concatenation = tf.concatenate(Seq(hidden, (Dataset.nodes : Output[Float])), 1) // concat reppresentation with feature vector
+    val hidden = GNN.layer(Dataset.nodes, Dataset.edges, mlp, activation) // learn representation
+    val concatenation = tf.concatenate(Seq(hidden, (Dataset.nodes : Output[Float])), 1) // concat representation with feature vector
     outputLayer(concatenation) // compute the right value
   }
   def train(optimizer : Optimizer, epochs : Int) : Unit = {
@@ -28,16 +32,16 @@ object Main extends App {
       val lossResult = loss((output, Dataset.groundTruth)) // compute loss
       println(s"Epoch $i,")
       val gradients = optimizer.minimize(lossResult)
-      session.run(targets = gradients)
-      val lossResultTensor = session.run(fetches = lossResult)
-      println("loss" + lossResultTensor.summarize())
+      gradients.eval()
+      println("loss" + lossResult.value().summarize())
     })
   }
-  val optimizer = GradientDescent(0.09f)
-  val session = Session()
-  session.run(targets = tf.globalVariablesInitializer())
-  val epoch = 100
+  val optimizer = GradientDescent(0.009f)
+  tf.globalVariablesInitializer().eval()
+  val epoch = 300
   train(optimizer, epoch)
+  val result = forward()(INFERENCE)
+  println(result.value().summarize())
 }
 
 object Dataset {

@@ -11,7 +11,7 @@ object GNN {
   def layer(
     features: GraphShape,
     adjacentMatrix: GraphShape,
-    transform: Dense,
+    transform : Output[Float] => Output[Float],
     activation: Layer[GraphShape, GraphShape]
   )(implicit mode : Mode): GraphShape = {
     val localNodeApplication = transform(features)
@@ -19,7 +19,7 @@ object GNN {
     activation(neighbourAggregation)
   }
 
-  case class Dense(name : String, units : Int, inputSize : Int) {
+  case class Dense(name : String, units : Int, inputSize : Int) extends ((Output[Float]) => Output[Float]) {
     private val weights : Variable[Float] = tf.variable[Float](s"W-$name", Shape(inputSize, units), RandomNormalInitializer())
     private val bias : Variable[Float] = tf.variable[Float](s"B-$name", Shape(units), ZerosInitializer)
     def apply(input: Output[Float]): Output[Float] = tf.matmul(input, weights) + bias
